@@ -1,0 +1,28 @@
+from sklearn.metrics import accuracy_score, recall_score, precision_score
+from data_loader import val_loader  # 引入验证数据集加载器
+
+def evaluate(model, val_loader):
+    model.eval()
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for inputs, targets in val_loader:
+            outputs = model(inputs)
+            preds = torch.sigmoid(outputs).round()  # 二分类：阈值 0.5
+            all_preds.append(preds)
+            all_labels.append(targets)
+    
+    # 计算各类指标
+    preds = torch.cat(all_preds, dim=0)
+    labels = torch.cat(all_labels, dim=0)
+    
+    acc = accuracy_score(labels.cpu().numpy(), preds.cpu().numpy())
+    rec = recall_score(labels.cpu().numpy(), preds.cpu().numpy())
+    pre = precision_score(labels.cpu().numpy(), preds.cpu().numpy())
+    dice = 2 * (acc * rec) / (acc + rec)  # 这里采用的是简化版的Dice系数
+    
+    print(f'Accuracy: {acc:.4f}, Recall: {rec:.4f}, Precision: {pre:.4f}, Dice: {dice:.4f}')
+
+# 调用评估函数
+evaluate(model, val_loader)

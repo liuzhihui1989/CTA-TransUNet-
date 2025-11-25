@@ -1,0 +1,83 @@
+import torch
+from torch.utils.data import DataLoader
+from cta_transunet import CTA_TransUNet
+from data_loader import train_loader, val_loader  # 引入数据加载器
+from losses import combined_loss
+import torch.optim as optim
+from sklearn.metrics import accuracy_score, recall_score, precision_score
+import argparse
+
+def train(model, train_loader, optimizer, num_epochs=100):
+    model.train()
+    for epoch in range(num_epochs):
+        running_loss = 0.0
+        for inputs, targets in train_loader:
+            optimizer.zero_grad()
+            
+            # 前向传播
+            outputs = model(inputs)
+            
+            # 计算损失
+            loss = combined_loss(outputs, targets)
+            
+            # 反向传播和优化
+            loss.backward()
+            optimizer.step()
+            
+            running_loss += loss.item()
+        
+        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}')
+
+def evaluate(model, val_loader, device):
+    model.eval()
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for inputs, targets in val_loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            preds = torch.sigmoid(outputs).round()
+            all_preds.append(preds)
+            all_labels.append(targets)
+    
+    # 计算各类指标
+    preds = torch.cat(all_preds, dim=0)
+    labels = torch.cat(all_labels, dim=0)
+    
+    acc = accuracy_score(labels.cpu().numpy(), preds.cpu().numpy())
+    rec = recall_score(labels.cpu().numpy(), preds.cpu().numpy())
+    pre = precision_score(labels.cpu().numpy(), preds.cpu().numpy())
+    dice = 2 * (preds * labels).sum() / (preds.sum() + labels.sum() + 1e-6)  # Dice 系数
+    
+    print(f'Accuracy: {acc:.4f}, Recall: {rec:.4f}, Precision: {pre:.4f}, Dice: {dice:.4f}')
+
+def main(args):
+    # 设置设备
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 初始化模型并转移到设备
+    model = CTA_TransUNet(num_classes=1).to(device)
+    
+    # 定义优化器
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    
+    # 训练模型
+    if args.train:
+        print("Starting training...")
+        train(model, train_loader, optimizer, num_epochs=args.epochs)
+    
+    # 评估模型
+    if args.evaluate:
+        print("Starting evaluation...")
+        evaluate(model, val_loader, device)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Train and Evaluate CTA-TransUNet for Skin Lesion Segmentation")
+    parser.add_argument('--train', action='store_true', help='Whether to train the model')
+    parser.add_argument('--evaluate', action='store_true', help='Whether to evaluate the model')
+    parser.add_argument('--lr', type=float, default=0.01, help='Learning rate for training')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs for training')
+    
+    args = parser.parse_args()
+    main(args)

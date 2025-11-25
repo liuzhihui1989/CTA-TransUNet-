@@ -1,0 +1,57 @@
+import os
+import random
+import shutil
+import argparse
+
+def split_dataset(input_dir, output_dir, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+    """Split the dataset into training, validation, and test sets."""
+    # Check if the sum of ratios equals 1
+    if train_ratio + val_ratio + test_ratio != 1.0:
+        raise ValueError("The sum of train, val, and test ratios must equal 1.")
+
+    # Ensure the output directories exist
+    train_dir = os.path.join(output_dir, "train")
+    val_dir = os.path.join(output_dir, "val")
+    test_dir = os.path.join(output_dir, "test")
+
+    for dir in [train_dir, val_dir, test_dir]:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
+    # Traverse through all files and subdirectories
+    for subdir, _, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):  # Only process image files
+                input_path = os.path.join(subdir, file)
+                class_name = os.path.basename(subdir)  # Get the class name from the folder name
+
+                # Ensure class folder structure exists in output directories
+                for split in ["train", "val", "test"]:
+                    class_folder = os.path.join(output_dir, split, class_name)
+                    if not os.path.exists(class_folder):
+                        os.makedirs(class_folder)
+
+                # Split the dataset
+                rand = random.random()
+                if rand < train_ratio:
+                    output_path = os.path.join(train_dir, class_name, file)
+                elif rand < train_ratio + val_ratio:
+                    output_path = os.path.join(val_dir, class_name, file)
+                else:
+                    output_path = os.path.join(test_dir, class_name, file)
+
+                shutil.copy(input_path, output_path)
+                print(f"Copied {input_path} -> {output_path}")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Split a dataset into train, validation, and test sets")
+    parser.add_argument('--input_dir', type=str, required=True, help="Path to the input dataset directory")
+    parser.add_argument('--output_dir', type=str, required=True, help="Path to save the split datasets")
+    parser.add_argument('--train_ratio', type=float, default=0.7, help="Proportion of training data")
+    parser.add_argument('--val_ratio', type=float, default=0.15, help="Proportion of validation data")
+    parser.add_argument('--test_ratio', type=float, default=0.15, help="Proportion of testing data")
+
+    args = parser.parse_args()
+
+    # Split dataset
+    split_dataset(args.input_dir, args.output_dir, args.train_ratio, args.val_ratio, args.test_ratio)
